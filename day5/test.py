@@ -2,7 +2,7 @@ from pathlib import Path
 
 from assertpy import assertpy
 
-from day5.main import Vent, silver
+from day5.main import Vent, silver, gold
 
 INPUT_PATH = Path(__file__).parent / "input.txt"
 EXAMPLE_PATH = Path(__file__).parent / "example.txt"
@@ -36,3 +36,11 @@ def test_silver_example():
 
 def test_silver_star():
     assert silver(INPUT_PATH) == 6007
+
+
+def test_gold_example():
+    assert gold(EXAMPLE_PATH) == 12
+
+
+def test_gold_star():
+    assert gold(INPUT_PATH) == 19349
