@@ -1,6 +1,7 @@
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
-from typing import List
+from typing import List, Set
 
 
 @dataclass(frozen=True)
@@ -13,6 +14,12 @@ class Location:
             x=self.x + other.x,
             y=self.y + other.y,
         )
+
+    def neighbours(self) -> Set["Location"]:
+        return {
+            self + direction
+            for direction in DIRECTIONS
+        }
 
 
 DIRECTIONS = (
@@ -87,7 +94,42 @@ class Grid:
             ]
         )
 
+    def find_basin_from_seed(self, location: Location) -> Set[Location]:
+        to_expand = {location}
+        basin = {location}
+        while len(to_expand) > 0:
+            current_location = to_expand.pop()
+            neighbours = current_location.neighbours()
+            basin_neighbours = self.non_9_locations().intersection(neighbours)
+            to_expand = to_expand.union(basin_neighbours - basin)
+            basin = basin.union(basin_neighbours)
+        return basin
+
+    def non_9_locations(self) -> Set[Location]:
+        return {
+            Location(x, y)
+            for x in range(self.width)
+            for y in range(self.height)
+            if self.get(Location(x, y)) != 9
+        }
+
 
 def silver(input_file_path: Path) -> int:
     grid = Grid.parse(input_file_path.read_text())
     return grid.sum_risk_levels()
+
+
+def gold(input_file_path: Path) -> int:
+    grid = Grid.parse(input_file_path.read_text())
+
+    basins = []
+    potential_seeds = grid.non_9_locations()
+    while len(potential_seeds) > 0:
+        seed_location = potential_seeds.pop()
+        new_basin = grid.find_basin_from_seed(seed_location)
+        basins.append(new_basin)
+        potential_seeds -= new_basin
+
+    basins.sort(key=lambda basin: len(basin))
+
+    return len(basins[-1]) * len(basins[-2]) * len(basins[-3])
