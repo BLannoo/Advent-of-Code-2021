@@ -1,72 +1,62 @@
-from collections import Counter
-from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional, Dict
+from typing import Dict
+
+import numpy as np
+
+Monomer = str
+Pair = str
 
 
-@dataclass
-class LinkedMonomers:
-    value: str
-    next_monomer: Optional["LinkedMonomers"]
-
-    @staticmethod
-    def from_str(polymer: str) -> "LinkedMonomers":
-        if len(polymer) == 1:
-            return LinkedMonomers(polymer[0], None)
-        return LinkedMonomers(
-            polymer[0],
-            LinkedMonomers.from_str(polymer[1:])
-        )
-
-
-@dataclass
-class Polymerizer:
-    polymer: LinkedMonomers
-    rules: Dict[str, str]
-
-    @staticmethod
-    def parse(input_file_path: Path) -> "Polymerizer":
-        polymer, rules_str = input_file_path.read_text().split("\n\n")
-
-        rules = {
-            rule_str.split("->")[0].strip(): rule_str.split("->")[1].strip()
-            for rule_str in rules_str.split("\n")
-        }
-
-        return Polymerizer(
-            polymer=LinkedMonomers.from_str(polymer),
-            rules=rules,
-        )
-
-    def polymerize_n_times(self, times: int) -> "Polymerizer":
-        for _ in range(times):
-            self.polymer = self.polymerize_once()
-        return self
-
-    def polymerize_once(self) -> "LinkedMonomers":
-        cursor = self.polymer
-        while cursor.next_monomer is not None:
-            new_monomer = LinkedMonomers(
-                value=self.rules[cursor.value + cursor.next_monomer.value],
-                next_monomer=cursor.next_monomer,
-            )
-            cursor.next_monomer = new_monomer
-            cursor = new_monomer.next_monomer
-
-        return self.polymer
-
-    def polymer_str(self):
-        result = ""
-        cursor = self.polymer
-        while cursor is not None:
-            result += cursor.value
-            cursor = cursor.next_monomer
-        return result
-
-    def count(self) -> Dict[str, int]:
-        return Counter(self.polymer_str())
-
-
-def silver(input_file_path: Path) -> int:
-    counts = Polymerizer.parse(input_file_path).polymerize_n_times(10).count()
+def core(input_file_path: Path, times: int) -> float:
+    counts = polymerize(input_file_path, times)
     return max(counts.values()) - min(counts.values())
+
+
+def polymerize(input_file_path: Path, times: int) -> Dict[Monomer, float]:
+    polymer_str, rules_str = input_file_path.read_text().split("\n\n")
+    rules = parse_rules(rules_str)
+    pairs_to_idx = {
+        pair: idx
+        for idx, pair in enumerate(rules.keys())
+    }
+    pair_count_vector = polymer_str_to_pair_count_vector(polymer_str, pairs_to_idx)
+    transitions = transition_matrix(rules, pairs_to_idx)
+
+    for _ in range(times):
+        pair_count_vector = transitions.dot(pair_count_vector)
+
+    return count_monomers(polymer_str, pairs_to_idx, pair_count_vector)
+
+
+def parse_rules(rules_str: str) -> Dict[Pair, Monomer]:
+    return {
+        rule_str.split("->")[0].strip(): rule_str.split("->")[1].strip()
+        for rule_str in rules_str.split("\n")
+    }
+
+
+def polymer_str_to_pair_count_vector(polymer_str: str, pairs_to_idx: Dict[Pair, int]) -> np.ndarray:
+    polymer = np.zeros(len(pairs_to_idx))
+    for prev_monomer, next_monomer in zip(polymer_str[:-1], polymer_str[1:]):
+        polymer[pairs_to_idx[prev_monomer + next_monomer]] += 1
+    return polymer
+
+
+def transition_matrix(rules: Dict[Pair, Monomer], pairs_to_idx: Dict[Pair, int]) -> np.ndarray:
+    transitions = np.zeros((len(pairs_to_idx),) * 2)
+    for pair, insert in rules.items():
+        transitions[pairs_to_idx[pair[0] + insert], pairs_to_idx[pair]] = 1
+        transitions[pairs_to_idx[insert + pair[1]], pairs_to_idx[pair]] = 1
+    return transitions
+
+
+def count_monomers(
+    polymer_str: str, pairs_to_idx: Dict[Pair, int], pair_count_vector: np.ndarray
+) -> Dict[Monomer, float]:
+    monomer_count = {}
+    for monomer in (polymer_str[0], polymer_str[-1]):
+        monomer_count[monomer] = monomer_count.get(monomer, 0) + 1 / 2
+    for pair, idx in pairs_to_idx.items():
+        for monomer in pair:
+            monomer_count[monomer] = monomer_count.get(monomer, 0) + pair_count_vector[idx] / 2
+    return monomer_count
