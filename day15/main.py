@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from pathlib import Path
+from typing import List
 
 from sortedcontainers import SortedList
 
@@ -12,7 +13,36 @@ class PathEndPoint:
 
 
 def silver(input_path: Path) -> int:
-    grid = [
+    return core(parse_grid(input_path))
+
+
+def gold(input_path: Path) -> int:
+    grid = parse_grid(input_path)
+    return core(extended_grid(grid))
+
+
+def extended_grid(grid):
+    height = len(grid)
+    width = len(grid[0])
+    return [
+        [
+            extended_risk(grid, x, y)
+            for x in range(width * 5)
+        ]
+        for y in range(height * 5)
+    ]
+
+
+def extended_risk(grid: List[List[int]], x: int, y: int) -> int:
+    height = len(grid)
+    width = len(grid[0])
+    reference_value = grid[y % height][x % width]
+    increased_value = reference_value + y // height + x // width
+    return (increased_value - 1) % 9 + 1
+
+
+def parse_grid(input_path):
+    return [
         [
             int(char)
             for char in line
@@ -20,12 +50,14 @@ def silver(input_path: Path) -> int:
         for line in input_path.read_text().split("\n")
     ]
 
+
+def core(grid: List[List[int]]) -> int:
     visited = [
         [
             False
             for _ in line
         ]
-        for line in input_path.read_text().split("\n")
+        for line in grid
     ]
 
     height = len(grid)
